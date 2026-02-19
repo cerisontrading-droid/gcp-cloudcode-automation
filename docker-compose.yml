@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.nextjs
+    container_name: gcp-cloud-code-app
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: development
+      GCP_PROJECT_ID: ${GCP_PROJECT_ID}
+      GCP_REGION: ${GCP_REGION:-us-west1}
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/.next
+    command: npm run dev
+    restart: unless-stopped
+    networks:
+      - cloud-code-network
+
+  # Optional: Add PostgreSQL for local database
+  postgres:
+    image: postgres:15-alpine
+    container_name: gcp-cloud-code-db
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME:-app_db}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - cloud-code-network
+    profiles:
+      - database
+
+networks:
+  cloud-code-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
