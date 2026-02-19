@@ -1,0 +1,60 @@
+apiVersion: skaffold/v4beta1
+kind: Config
+metadata:
+  name: gcp-cloudcode-automation
+
+project: gcp-free-tier
+
+build:
+  googleCloudBuild:
+    projectId: "" # Set via environment
+    machineType: "N1_STANDARD_1"
+    logging: CLOUD_LOGGING_ONLY
+  
+  artifacts:
+    - image: gcr.io/PROJECT_ID/cloudcode-app
+      docker:
+        dockerfile: Dockerfile
+
+deploy:
+  custom:
+    - command: |
+        gcloud compute instances list --filter=name:cloudcode-instance \
+        --format='value(NAME,EXTERNAL_IP)' | awk '{print $2}' | head -n 1 | xargs -I {} \
+        ssh -i ~/.ssh/google_compute_engine ubuntu@{} \
+        'docker pull gcr.io/PROJECT_ID/cloudcode-app:latest && \
+        docker stop app || true && \
+        docker run -d --name app -p 80:3000 gcr.io/PROJECT_ID/cloudcode-app:latest'
+
+portForward:
+  - resourceType: deployment
+    resourceName: app
+    port: 3000
+    localPort: 3000
+
+filesync:
+  - src: "src/**/*.ts"
+    dest: /app/src
+  - src: "src/**/*.tsx"
+    dest: /app/src
+  - src: "public/**/*"
+    dest: /app/public
+
+profiles:
+  - name: dev
+    activation:
+      - command: dev
+    patches:
+      - op: replace
+        path: /build/googleCloudBuild/machineType
+        value: "E2_MEDIUM"
+
+  - name: prod
+    activation:
+      - command: run
+
+  - name: free-tier
+    patches:
+      - op: replace
+        path: /build/googleCloudBuild/machineType
+        value: "E2_MEDIUM"
